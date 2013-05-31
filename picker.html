@@ -1,0 +1,212 @@
+<html>
+<head>
+<style>
+canvas:active { 
+    cursor: pointer;
+}
+
+canvas {
+	border:1px solid #000000;
+}
+</style>
+<script type="text/javascript" src="jquery-1.10.1.min.js" ></script>
+<script type="text/javascript" src="color.js" ></script>
+<script type="text/javascript" src="knockout-2.2.1.js" ></script>
+<script type="text/javascript" >
+
+var Color = net.brehaut.Color;
+var HUE_VALUE_HEIGHT = 300;
+var HUE_VALUE_WIDTH = 300;
+var SATURATION_HEIGHT = 300;
+var SATURATION_WIDTH = 20;
+var GRAB_OFFSET = 7;
+var canvasHV;
+var ctxHV;
+var canvasHVPicker;
+var ctxHVPicker;
+var canvasS;
+var ctxS;
+var canvasSPicker;
+var ctxSPicker;
+var picker = new PickerViewModel();
+
+function draw_value_hue_square(x, y, width, height) {  
+	var color = Color({hue: 0, saturation: 1, value: 1});
+	var inc = 360 / width;  
+	var valInc = 1 / height;
+	for (var h = 0; h < 360; h += inc) {  
+	  color = color.setHue(h);
+	  for (var v = 1; v > 0; v -= valInc) { 
+		color = color.setValue(v);
+		ctxHV.fillStyle = color.toCSS();
+		ctxHV.fillRect(x + Math.round(h/inc), y + Math.round((1-v)/valInc),1,1);
+	  }  
+	}  
+}  
+  
+function draw_vertical_saturation_bar(hue,value, x, y, width, height) {  
+	var color = Color({hue: hue, saturation: 1, value: value});
+	var satInc = 1 / height;  
+	for (var s = 1; s > 0; s -= satInc) {  
+	  color = color.setSaturation(s);
+	  for (var i = 0; i <= width; i++) { 
+		ctxS.fillStyle = color.toCSS();
+		ctxS.fillRect(x + i, y + Math.round((1-s)/satInc),1,1);
+	  }  
+	}  
+}  
+  
+function draw_circle(centerX,centerY,radius) {
+	
+	ctxHVPicker.beginPath();
+	ctxHVPicker.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+	ctxHVPicker.lineWidth = 2;
+	ctxHVPicker.strokeStyle = 'white';
+	ctxHVPicker.stroke();
+}
+
+function draw_slider(y) {
+	
+	ctxSPicker.strokeStyle = 'white';
+	ctxSPicker.lineWidth = 2;
+	ctxSPicker.strokeRect(0,y,SATURATION_WIDTH,4);
+}
+  
+  
+function PickerViewModel() {
+
+	this.hueValueX = ko.observable(100);
+	this.hueValueY = ko.observable(100);
+	this.hue = ko.computed(function() {
+			return this.hueValueX()*360/HUE_VALUE_WIDTH;   
+		}, this);
+	this.value = ko.computed(function() {
+			return 1-this.hueValueY()/HUE_VALUE_HEIGHT;   
+		}, this);
+	
+	this.saturationY = ko.observable(100);
+	this.saturation = ko.computed(function() {
+			return 1-this.saturationY()/SATURATION_HEIGHT;   
+		}, this);
+	this.hueValueDragging = ko.observable(false);
+	this.saturationDragging = ko.observable(false);
+	this.color = ko.computed(function() {
+		return Color({hue: this.hue(), saturation: this.saturation(), value: this.value()}).toCSS();
+		}, this);
+	
+}
+  
+function reDrawHueValue() {
+	ctxHVPicker.clearRect(0, 0, HUE_VALUE_WIDTH, HUE_VALUE_HEIGHT);
+	draw_circle(picker.hueValueX(),picker.hueValueY(),4);
+}
+
+function reDrawSaturation() {
+	ctxS.clearRect(0, 0, SATURATION_WIDTH, SATURATION_HEIGHT);
+	draw_vertical_saturation_bar(picker.hue(),picker.value(),0,0,SATURATION_WIDTH,SATURATION_HEIGHT);
+}
+
+function reDrawSaturationSlider() {
+	ctxSPicker.clearRect(0, 0, SATURATION_WIDTH, SATURATION_HEIGHT);
+	draw_slider(picker.saturationY());
+}
+
+function mouseMove(e){
+ if (picker.hueValueDragging()){
+  	 picker.hueValueX(e.pageX - canvasHVPicker.offsetParent.offsetLeft);
+	 picker.hueValueY(e.pageY - canvasHVPicker.offsetParent.offsetTop);
+ }
+}
+
+function mouseDown(e){
+ if (e.pageX < picker.hueValueX() + GRAB_OFFSET + canvasHVPicker.offsetParent.offsetLeft && e.pageX > picker.hueValueX() - GRAB_OFFSET +
+ canvasHVPicker.offsetParent.offsetLeft && e.pageY < picker.hueValueY() + GRAB_OFFSET + canvasHVPicker.offsetParent.offsetTop &&
+ e.pageY > picker.hueValueY() - GRAB_OFFSET + canvasHVPicker.offsetParent.offsetTop){
+	 picker.hueValueX(e.pageX - canvasHVPicker.offsetParent.offsetLeft);
+	 picker.hueValueY(e.pageY - canvasHVPicker.offsetParent.offsetTop);
+	 picker.hueValueDragging(true);
+	 canvasHVPicker.onmousemove = mouseMove;
+ }
+}
+
+function mouseUp(){
+ 	picker.hueValueDragging(false);
+ 	canvasHVPicker.onmousemove = null;
+}
+
+
+function mouseMoveSaturation(e){
+ if (picker.saturationDragging()){
+	 picker.saturationY(e.pageY - canvasSPicker.offsetParent.offsetTop);
+ }
+}
+function mouseDownSaturation(e){
+ if (e.pageX < SATURATION_WIDTH + GRAB_OFFSET + canvasSPicker.offsetParent.offsetLeft && e.pageX > - GRAB_OFFSET +
+ canvasSPicker.offsetParent.offsetLeft && e.pageY < picker.saturationY() + GRAB_OFFSET + canvasSPicker.offsetParent.offsetTop &&
+ e.pageY > picker.saturationY() - GRAB_OFFSET + canvasSPicker.offsetParent.offsetTop){
+	 picker.saturationY(e.pageY - canvasSPicker.offsetParent.offsetTop);
+	 picker.saturationDragging(true);
+	 canvasSPicker.onmousemove = mouseMoveSaturation;
+ }
+}
+
+
+
+
+
+
+function mouseUpSaturation(){
+ 	picker.saturationDragging(false);
+ 	canvasSPicker.onmousemove = null;
+}
+
+
+
+$(document).ready(function(){
+	
+	canvasHV = document.getElementById("canvasHV");
+	ctxHV = canvasHV.getContext("2d");
+	canvasHVPicker = document.getElementById("canvasHVPicker");
+	ctxHVPicker = canvasHVPicker.getContext("2d");
+	canvasS = document.getElementById("canvasS");
+	ctxS = canvasS.getContext("2d");
+	canvasSPicker = document.getElementById("canvasSPicker");
+	ctxSPicker = canvasSPicker.getContext("2d");
+	ko.applyBindings(picker);
+	draw_value_hue_square(0,0,HUE_VALUE_WIDTH,HUE_VALUE_HEIGHT);
+	draw_vertical_saturation_bar(picker.hue(),picker.value(),0,0,SATURATION_WIDTH,SATURATION_HEIGHT);
+	draw_circle(picker.hueValueX(),picker.hueValueY(),4);
+	draw_slider(picker.saturationY());
+	
+	setInterval(reDrawHueValue, 100);
+	setInterval(reDrawSaturation, 200);
+	setInterval(reDrawSaturationSlider, 100);
+	
+	canvasHVPicker.onmousedown = mouseDown;
+	canvasHVPicker.onmouseup = mouseUp;
+	
+	canvasSPicker.onmousedown = mouseDownSaturation;
+	canvasSPicker.onmouseup = mouseUpSaturation;
+	
+});
+
+
+</script>
+</head>
+<body>
+<div style="float:left; position:relative; width:300px; height:300px; padding-right:30px;">
+	<canvas id="canvasHV" style="z-index:1;position:absolute;left:0px;top:0px;" width="300" height="300"></canvas>
+	<canvas id="canvasHVPicker" style="z-index:2;position:absolute;left:0px;top:0px;" width="300" height="300"></canvas>
+</div>
+<div style="float:left; position:relative; width:20px; height:300px; padding-right:30px;">
+	<canvas id="canvasS" style="z-index:1;position:absolute;left:0px;top:0px;" width="20" height="300"></canvas>
+	<canvas id="canvasSPicker" style="z-index:2;position:absolute;left:0px;top:0px;" width="20" height="300"></canvas>
+</div>
+<div>
+<div data-bind="text: color"></div>
+<div data-bind="style: { backgroundColor: color(), width: '30px', height: '30px', cssFloat: 'left' , border: '1px solid #000000'}"></div>
+<!--<div data-bind="text: hueValueX"></div>
+<div data-bind="text: hueValueY"></div>-->
+</div>
+</body>
+</html>
